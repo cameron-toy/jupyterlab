@@ -31,6 +31,8 @@ import {
 } from '@lumino/widgets';
 import { JupyterFrontEnd } from './frontend';
 
+import { isValidFileName } from '@jupyterlab/docmanager';
+
 /**
  * The class name added to AppShell instances.
  */
