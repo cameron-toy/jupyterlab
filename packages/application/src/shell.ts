@@ -352,7 +352,6 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
       const input = document.querySelector(
         '#filename-searcher .bp3-input'
       ) as HTMLInputElement;
-      console.log('awesome', input);
       input.focus();
     });
     skipLinkWidget.addClass('jp-skiplink');
