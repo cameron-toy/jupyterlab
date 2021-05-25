@@ -500,6 +500,8 @@ export class DocumentWidget<
 
     // Listen for changes to the title object
     this.title.changed.connect(this._onTitleChanged, this);
+    
+    this.shouldNameFile = new Signal<this, void>(this);
   }
 
   /**
@@ -555,6 +557,7 @@ export class DocumentWidget<
   }
 
   readonly context: DocumentRegistry.IContext<U>;
+  shouldNameFile: Signal<any, void>;
 }
 
 export namespace DocumentWidget {
