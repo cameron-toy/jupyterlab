@@ -32,7 +32,7 @@ import {
 
 import { JupyterFrontEnd } from './frontend';
 
-import { isValidFileName } from '@jupyterlab/docmanager';
+import { MainAreaWidget } from '@jupyterlab/apputils';
 
 /**
  * The class name added to AppShell instances.
@@ -326,14 +326,12 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
     );
 
     // Setup single-document-mode title bar
-    const titleWidgetHandler = (this._titleWidgetHandler = new Private.TitleWidgetHandler(
-      this
-    ));
-    this.add(titleWidgetHandler.titleWidget, 'top', { rank: 100 });
+    const titleHandler = (this._titleHandler = new Private.TitleHandler(this));
+    this.add(titleHandler, 'top', { rank: 100 });
 
     if (this._dockPanel.mode === 'multiple-document') {
       this._topHandler.addWidget(this._menuHandler.panel, 100);
-      titleWidgetHandler.hide();
+      titleHandler.hide();
     } else {
       rootLayout.insertWidget(2, this._menuHandler.panel);
     }
@@ -473,7 +471,7 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
       // Adjust menu and title
       // this.add(this._menuHandler.panel, 'top', {rank: 100});
       (this.layout as BoxLayout).insertWidget(2, this._menuHandler.panel);
-      this._titleWidgetHandler.show();
+      this._titleHandler.show();
       this._updateTitlePanelTitle();
 
       this._modeChanged.emit(mode);
@@ -521,7 +519,7 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
     // Adjust menu and title
     this.add(this._menuHandler.panel, 'top', { rank: 100 });
     // this._topHandler.addWidget(this._menuHandler.panel, 100)
-    this._titleWidgetHandler.hide();
+    this._titleHandler.hide();
 
     // Emit the mode changed signal
     this._modeChanged.emit(mode);
@@ -697,7 +695,7 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
       return;
     }
     this._layoutDebouncer.dispose();
-    this._titleWidgetHandler.dispose();
+    this._titleHandler.dispose();
     super.dispose();
   }
 
@@ -867,8 +865,7 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
    */
   private _updateTitlePanelTitle() {
     let current = this.currentWidget;
-    const inputElement = this._titleWidgetHandler.titleWidget.node
-      .children[0] as HTMLInputElement;
+    const inputElement = this._titleHandler.inputElement;
     inputElement.value = current ? current.title.label : '';
     inputElement.title = current ? current.title.caption : '';
   }
@@ -1213,7 +1210,7 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
   private _headerPanel: Panel;
   private _topHandler: Private.PanelHandler;
   private _menuHandler: Private.PanelHandler;
-  private _titleWidgetHandler: Private.TitleWidgetHandler;
+  private _titleHandler: Private.TitleHandler;
   private _bottomPanel: Panel;
   private _mainOptionsCache = new Map<Widget, DocumentRegistry.IOpenOptions>();
   private _sideOptionsCache = new Map<Widget, DocumentRegistry.IOpenOptions>();
@@ -1551,21 +1548,37 @@ namespace Private {
     private _lastCurrent: Widget | null;
   }
 
-  export class TitleWidgetHandler {
+  export class TitleHandler extends Widget {
     /**
-     * Construct a new title widget handler.
+     * Construct a new title handler.
      */
     constructor(shell: ILabShell) {
+      super();
+      const inputElement = document.createElement('input');
+      inputElement.type = 'text';
+      this.node.appendChild(inputElement);
       this._shell = shell;
-      const titleWidget = (this._titleWidget = new Widget());
-      titleWidget.id = 'jp-title-panel-title';
-      const titleInput = document.createElement('input');
-      titleInput.type = 'text';
-      titleInput.addEventListener('keyup', this);
-      titleInput.addEventListener('click', this);
-      titleInput.addEventListener('blur', this);
+      this.id = 'jp-title-panel-title';
+    }
 
-      titleWidget.node.appendChild(titleInput);
+    /**
+     * Handle `after-attach` messages for the widget.
+     */
+    protected onAfterAttach(msg: Message): void {
+      super.onAfterAttach(msg);
+      this.inputElement.addEventListener('keyup', this);
+      this.inputElement.addEventListener('click', this);
+      this.inputElement.addEventListener('blur', this);
+    }
+
+    /**
+     * Handle `before-detach` messages for the widget.
+     */
+    protected onBeforeDetach(msg: Message): void {
+      super.onBeforeDetach(msg);
+      this.inputElement.removeEventListener('keyup', this);
+      this.inputElement.removeEventListener('click', this);
+      this.inputElement.removeEventListener('blur', this);
     }
 
     handleEvent(event: Event): void {
@@ -1588,17 +1601,18 @@ namespace Private {
     private async _evtKeyUp(event: KeyboardEvent): Promise<void> {
       if (event.key == 'Enter') {
         const widget = this._shell.currentWidget;
-        if (widget instanceof DocumentWidget) {
-          const oldName = widget.context.path.split('/').pop()!;
-          const inputElement = this.titleWidget.node
-            .children[0] as HTMLInputElement;
-          const newName = inputElement.value;
-          inputElement.blur();
-          if (newName !== oldName && isValidFileName(newName)) {
-            await widget.context.rename(newName);
-          } else {
-            inputElement.value = oldName;
-          }
+        if (widget == null || !(widget instanceof MainAreaWidget)) {
+          return;
+        }
+        const oldName = widget.title.label;
+        const inputElement = this.inputElement;
+        const newName = inputElement.value;
+        inputElement.blur();
+
+        if (newName !== oldName) {
+          widget.title.label = newName;
+        } else {
+          inputElement.value = oldName;
         }
       }
     }
@@ -1613,9 +1627,8 @@ namespace Private {
       }
 
       const currentWidget = this._shell.currentWidget;
-      const inputElement = this.titleWidget.node
-        .children[0] as HTMLInputElement;
-      if (currentWidget == null || !(currentWidget instanceof DocumentWidget)) {
+      const inputElement = this.inputElement;
+      if (currentWidget == null || !(currentWidget instanceof MainAreaWidget)) {
         inputElement.readOnly = true;
         return;
       } else {
@@ -1636,50 +1649,13 @@ namespace Private {
     }
 
     /**
-     * Get the input element managed by the handler.
+     * The input element containing the parent widget's title.
      */
-    get titleWidget(): Widget {
-      return this._titleWidget;
+    get inputElement(): HTMLInputElement {
+      return this.node.children[0] as HTMLInputElement;
     }
 
-    /**
-     * Dispose of the handler and the resources it holds.
-     */
-    dispose(): void {
-      if (this.isDisposed) {
-        return;
-      }
-      this._isDisposed = true;
-      this._titleWidget.node.removeEventListener('keyup', this);
-      this._titleWidget.node.removeEventListener('click', this);
-      this._titleWidget.node.removeEventListener('blur', this);
-      this._titleWidget.dispose();
-    }
-
-    /**
-     * Hide the title widget.
-     */
-    hide(): void {
-      this._titleWidget.hide();
-    }
-
-    /**
-     * Show the title widget.
-     */
-    show(): void {
-      this._titleWidget.show();
-    }
-
-    /**
-     * Test whether the handler has been disposed.
-     */
-    get isDisposed(): boolean {
-      return this._isDisposed;
-    }
-
-    private _titleWidget: Widget;
     private _shell: ILabShell;
-    private _isDisposed: boolean = false;
     private _selected: boolean = false;
   }
 }

@@ -9,7 +9,7 @@ import { PartialJSONValue } from '@lumino/coreutils';
 
 import { ISignal, Signal } from '@lumino/signaling';
 
-import { Widget } from '@lumino/widgets';
+import { Title, Widget } from '@lumino/widgets';
 
 import { MainAreaWidget } from '@jupyterlab/apputils';
 
@@ -486,6 +486,9 @@ export class DocumentWidget<
     void this.context.ready.then(() => {
       this._handleDirtyState();
     });
+
+    // Listen for changes to the title object
+    this.title.changed.connect(this._onTitleChanged, this);
   }
 
   /**
@@ -493,6 +496,18 @@ export class DocumentWidget<
    */
   setFragment(fragment: string): void {
     /* no-op */
+  }
+
+  /**
+   * Handle a title change.
+   */
+  private _onTitleChanged(_sender: Title<this>) {
+    const validNameExp = /[\/\\:]/;
+    const name = this.title.label;
+    const filename = this.context.path.split('/').pop()!;
+    if (name !== filename && name.length > 0 && !validNameExp.test(name)) {
+      void this.context.rename(name);
+    }
   }
 
   /**
