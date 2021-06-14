@@ -1,7 +1,6 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-import { isValidFileName } from '@jupyterlab/docmanager';
 import { DocumentRegistry, DocumentWidget } from '@jupyterlab/docregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import {
@@ -574,7 +573,7 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
       // Adjust menu and title
       this.add(this._menuHandler.panel, 'top', { rank: 100 });
       // this._topHandler.addWidget(this._menuHandler.panel, 100)
-      this._titleWidgetHandler.hide();
+      this._titleHandler.hide();
     }
 
     // Set the mode data attribute on the applications shell node.
@@ -765,7 +764,6 @@ export class LabShell extends Widget implements JupyterFrontEnd.IShell {
       return;
     }
     this._layoutDebouncer.dispose();
-    this._titleHandler.dispose();
     super.dispose();
   }
 
@@ -1808,7 +1806,7 @@ namespace Private {
     private _isDisposed: boolean = false;
   }
 
-  export class TitleWidgetHandler {
+  export class TitleHandler extends Widget {
     /**
      * Construct a new title handler.
      */
